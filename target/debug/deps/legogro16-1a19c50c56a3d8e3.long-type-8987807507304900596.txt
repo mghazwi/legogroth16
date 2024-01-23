@@ -1,1 +1,0 @@
-(snark::EK<ark_ec::short_weierstrass::Affine<ark_bls12_381::g1::Config>>, snark::VK<ark_ec::short_weierstrass::Affine<ark_bls12_381::g2::Config>>)
