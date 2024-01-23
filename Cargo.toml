@@ -1,6 +1,6 @@
 [package]
 name = "legogro16"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 
@@ -16,12 +16,6 @@ ark-r1cs-std = { version = "^0.4.0", default-features = false }
 ark-relations = { version = "^0.4.0", default-features = false }
 ark-serialize = { version = "^0.4.0", default-features = false, features = [ "derive" ] }
 ark-std = { version = "^0.4.0", default-features = false }
-
-#ark-ff = { path = "../arkworks/algebra/ff" }
-#ark-ec = { path = "../arkworks/algebra/ec" }
-#ark-poly = { path = "../arkworks/algebra/poly" }
-# ark-relations = { path = "../arkworks/snark/relations" }
-# ark-serialize = { path = "../arkworks/algebra/serialize" }
 
 # Other dependencies
 tracing = { version = "0.1", default-features = false, features = [ "attributes" ] }
