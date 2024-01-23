@@ -9,19 +9,19 @@ ark-bls12-377 = { version = "^0.4.0", default-features = false, features = ["cur
 ark-bls12-381 = { version = "^0.4.0", default-features = false, features = ["curve"] }
 ark-cp6-782 = { version = "^0.4.0", default-features = false }
 ark-crypto-primitives = { version = "^0.4.0", default-features = false }
-# ark-ec = { version = "^0.4.0", default-features = false }
-# ark-ff = { version = "^0.4.0", default-features = false }
-# ark-poly = { version = "^0.4.0", default-features = false }
+ark-ec = { version = "^0.4.0", default-features = false }
+ark-ff = { version = "^0.4.0", default-features = false }
+ark-poly = { version = "^0.4.0", default-features = false }
 ark-r1cs-std = { version = "^0.4.0", default-features = false }
-# ark-relations = { version = "^0.4.0", default-features = false }
-# ark-serialize = { version = "^0.4.0", default-features = false, features = [ "derive" ] }
+ark-relations = { version = "^0.4.0", default-features = false }
+ark-serialize = { version = "^0.4.0", default-features = false, features = [ "derive" ] }
 ark-std = { version = "^0.4.0", default-features = false }
 
-ark-ff = { path = "../arkworks/algebra/ff" }
-ark-ec = { path = "../arkworks/algebra/ec" }
-ark-poly = { path = "../arkworks/algebra/poly" }
-ark-relations = { path = "../arkworks/snark/relations" }
-ark-serialize = { path = "../arkworks/algebra/serialize" }
+#ark-ff = { path = "../arkworks/algebra/ff" }
+#ark-ec = { path = "../arkworks/algebra/ec" }
+#ark-poly = { path = "../arkworks/algebra/poly" }
+# ark-relations = { path = "../arkworks/snark/relations" }
+# ark-serialize = { path = "../arkworks/algebra/serialize" }
 
 # Other dependencies
 tracing = { version = "0.1", default-features = false, features = [ "attributes" ] }

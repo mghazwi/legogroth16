@@ -23,10 +23,13 @@ pub mod verifier;
 
 pub mod link;
 
+pub mod error;
+
 /// Constraints for the Groth16 verifier.
 // Cannot yet create a LegoGroth16 gadget (for recursive proof) so commenting it out.
 // #[cfg(feature = "r1cs")]
 // pub mod constraints;
+pub type Result<T> = core::result::Result<T, error::Error>;
 
 #[cfg(test)]
 mod test;

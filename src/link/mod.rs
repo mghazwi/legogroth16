@@ -1,5 +1,5 @@
 #[macro_use]
-
+pub mod error;
 mod matrix;
 mod snark;
 

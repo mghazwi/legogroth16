@@ -3,7 +3,7 @@ use core::ops::Mul;
 use crate::{
     link::{PESubspaceSnark, SparseMatrix, SubspaceSnark, PP},
     r1cs_to_qap::R1CStoQAP,
-    ProvingKey, Vec, VerifyingKey,
+    ProvingKey, Vec, VerifyingKey, ProvingKeyWithLink, VerifyingKeyWithLink, ProvingKeyCommon,
 };
 use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField, UniformRand, Zero};
@@ -23,12 +23,89 @@ use rayon::prelude::*;
 #[inline]
 pub fn generate_random_parameters<E, C, R>(
     circuit: C,
-    pedersen_bases: &[E::G1Affine],
     rng: &mut R,
 ) -> R1CSResult<ProvingKey<E>>
 where
     E: Pairing,
     C: ConstraintSynthesizer<E::ScalarField>,
+    R: Rng,
+{
+
+    let (alpha, beta, gamma, delta, eta) =
+        generate_randomness::<E, R>(rng);
+
+    let (pk, _) = generate_parameters::<E, C, R>(circuit, alpha, beta, gamma, delta, eta, rng).unwrap();
+    Ok(pk)
+}
+
+/// Generates a random common reference string for
+/// a circuit with CP-link.
+#[inline]
+pub fn generate_random_parameters_with_link<E, C, R>(
+    circuit: C,
+    pedersen_bases: &[E::G1Affine],
+    rng: &mut R,
+) -> R1CSResult<ProvingKeyWithLink<E>>
+where
+    E: Pairing,
+    C: ConstraintSynthesizer<E::ScalarField>,
+    R: Rng,
+{
+
+    let (alpha, beta, gamma, delta, eta) =
+        generate_randomness::<E, R>(rng);
+
+    let (groth16_pk, num_instance_variables) = generate_parameters::<E, C, R>(circuit, alpha, beta, gamma, delta, eta, rng).unwrap();
+
+
+    let link_rows = 2; // we're comparirng two commitments
+    let link_cols = pedersen_bases.len() + 1; // we have len witnesses and 1 hiding factor per row
+    let link_pp = PP::<E::G1Affine, E::G2Affine> {
+        l: link_rows,
+        t: link_cols,
+        g1: E::G1Affine::generator(),
+        g2: E::G2Affine::generator(),
+    };
+
+    let mut link_m = SparseMatrix::<E::G1Affine>::new(link_rows, link_cols);
+    let commit_witness_count = groth16_pk.vk.gamma_abc_g1[num_instance_variables..].len();
+    link_m.insert_row_slice(0, 0, &pedersen_bases);
+    link_m.insert_row_slice(
+        1,
+        0,
+        &groth16_pk.vk.gamma_abc_g1[num_instance_variables..]
+            .to_vec(),
+    );
+    link_m.insert_row_slice(1, commit_witness_count+1, &[groth16_pk.vk.eta_gamma_inv_g1]);
+
+    let (link_ek, link_vk) = PESubspaceSnark::<E>::keygen(rng, &link_pp, link_m);
+    let vk = VerifyingKeyWithLink::<E> {
+        groth16_vk: groth16_pk.vk,
+        link_pp,
+        link_bases: pedersen_bases.to_vec(),
+        link_vk,
+    };
+
+    Ok(ProvingKeyWithLink {
+        vk,
+        common: groth16_pk.common,
+        link_ek,
+    })
+}
+
+// generate random params
+#[inline]
+fn generate_randomness<E, R>(
+    rng: &mut R,
+) -> (
+    E::ScalarField,
+    E::ScalarField,
+    E::ScalarField,
+    E::ScalarField,
+    E::ScalarField,
+)
+where
+    E: Pairing,
     R: Rng,
 {
     let alpha = E::ScalarField::rand(rng);
@@ -37,7 +114,7 @@ where
     let delta = E::ScalarField::rand(rng);
     let eta = E::ScalarField::rand(rng);
 
-    generate_parameters::<E, C, R>(circuit, alpha, beta, gamma, delta, eta, pedersen_bases, rng)
+    (alpha, beta, gamma, delta, eta)
 }
 
 /// Create parameters for a circuit, given some toxic waste.
@@ -48,9 +125,8 @@ pub fn generate_parameters<E, C, R>(
     gamma: E::ScalarField,
     delta: E::ScalarField,
     eta: E::ScalarField,
-    pedersen_bases: &[E::G1Affine],
     rng: &mut R,
-) -> R1CSResult<ProvingKey<E>>
+) -> crate::Result<(ProvingKey<E>, usize)>
 where
     E: Pairing,
     C: ConstraintSynthesizer<E::ScalarField>,
@@ -83,7 +159,9 @@ where
     ///////////////////////////////////////////////////////////////////////////
 
     let reduction_time = start_timer!(|| "R1CS to QAP Instance Map with Evaluation");
-    let num_instance_variables = cs.num_instance_variables();
+    // following line take into account the number of witness which will be included in the commitment
+    let num_instance_var = cs.num_instance_variables();
+    let num_instance_variables = num_instance_var + cs.num_witness_variables();
     let (a, b, c, zt, qap_num_variables, m_raw) =
         R1CStoQAP::instance_map_with_evaluation::<E::ScalarField, D<E::ScalarField>>(cs, &t)?;
     end_timer!(reduction_time);
@@ -197,29 +275,6 @@ where
 
     let eta_gamma_inv_g1 = g1_generator.mul(eta * &gamma_inverse);
 
-    let link_rows = 2; // we're comparirng two commitments
-    let link_cols = gamma_abc_g1.len() + 2; // we have len inputs and 1 hiding factor per row
-    let link_pp = PP::<E::G1Affine, E::G2Affine> {
-        l: link_rows,
-        t: link_cols,
-        g1: E::G1Affine::generator(),
-        g2: E::G2Affine::generator(),
-    };
-
-    let mut link_m = SparseMatrix::<E::G1Affine>::new(link_rows, link_cols);
-    link_m.insert_row_slice(0, 0, &pedersen_bases);
-    link_m.insert_row_slice(
-        1,
-        0,
-        &gamma_abc_g1
-            .iter()
-            .map(|p| p.into_affine())
-            .collect::<Vec<_>>(),
-    );
-    link_m.insert_row_slice(1, gamma_abc_g1.len() + 1, &[eta_gamma_inv_g1.into_affine()]);
-
-    let (link_ek, link_vk) = PESubspaceSnark::<E>::keygen(rng, &link_pp, link_m);
-
     let vk = VerifyingKey::<E> {
         alpha_g1: alpha_g1.into_affine(),
         beta_g2: beta_g2.into_affine(),
@@ -227,10 +282,6 @@ where
         delta_g2: delta_g2.into_affine(),
         gamma_abc_g1: E::G1::normalize_batch(&gamma_abc_g1),
         eta_gamma_inv_g1: eta_gamma_inv_g1.into_affine(),
-
-        link_pp,
-        link_bases: pedersen_bases.to_vec(),
-        link_vk,
     };
 
     let batch_normalization_time = start_timer!(|| "Convert proving key elements to affine");
@@ -244,8 +295,7 @@ where
 
     let eta_delta_inv_g1 = g1_generator.mul(eta * &delta_inverse);
 
-    Ok(ProvingKey {
-        vk,
+    let pk_common = ProvingKeyCommon {
         beta_g1: beta_g1.into_affine(),
         delta_g1: delta_g1.into_affine(),
         eta_delta_inv_g1: eta_delta_inv_g1.into_affine(),
@@ -254,7 +304,10 @@ where
         b_g2_query,
         h_query,
         l_query,
+    };
 
-        link_ek,
-    })
+    Ok((ProvingKey {
+        vk,
+        common: pk_common,
+    }, num_instance_var))
 }
