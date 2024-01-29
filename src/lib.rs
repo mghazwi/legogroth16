@@ -25,6 +25,8 @@ pub mod link;
 
 pub mod error;
 
+pub mod aggregation;
+
 /// Constraints for the Groth16 verifier.
 // Cannot yet create a LegoGroth16 gadget (for recursive proof) so commenting it out.
 // #[cfg(feature = "r1cs")]
