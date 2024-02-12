@@ -1,6 +1,5 @@
 use crate::{
-    create_random_proof, generate_random_parameters, prepare_verifying_key, verify_commitments, verify_witness_commitment,
-    verify_proof, Vec, generate_random_parameters_with_link, create_random_proof_with_link, verify_proof_with_link,
+    create_d, create_random_proof, create_random_proof_with_link, generate_random_parameters, generate_random_parameters_with_link, prepare_verifying_key, verify_commitments, verify_proof, verify_proof_with_link, verify_witness_commitment, Vec
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::UniformRand;
@@ -124,13 +123,71 @@ where
     }
 }
 
+fn test_prove_and_verify_with_d_out_of_prove_fn<E>(n_iters: usize)
+where
+    E: Pairing,
+{
+    let mut rng = StdRng::seed_from_u64(0u64);
+
+    let params = generate_random_parameters::<E, _, _>(
+        MySillyCircuit { a: None, b: None },
+        &mut rng,
+    )
+    .unwrap();
+
+
+    let pvk = prepare_verifying_key::<E>(&params.vk);
+
+    for _ in 0..n_iters {
+        let a = E::ScalarField::rand(&mut rng);
+        let b = E::ScalarField::rand(&mut rng);
+        let mut c = a;
+        c.mul_assign(&b);
+
+        // Create commitment randomness
+        let v = E::ScalarField::rand(&mut rng); // Randomness for the committed witness in proof.d
+        // Create a LegoGro16 proof with our parameters.
+        let proof = create_random_proof(
+            MySillyCircuit {
+                a: Some(a),
+                b: Some(b),
+            },
+            v,
+            &params,
+            &mut rng,
+        )
+        .unwrap();
+
+        let proof = create_d(
+            vec![a,b], 
+            vec![c],
+            &params.vk, 
+            v, 
+            &proof)
+        .unwrap();
+        
+        assert!(verify_witness_commitment(&params.vk, &proof, 1, &[a,b], &v).unwrap());
+        assert!(verify_witness_commitment(&params.vk, &proof, 1, &[a], &v).is_err());
+        assert!(verify_witness_commitment(&params.vk, &proof, 1, &[c], &a).is_err());
+        
+        // verify proofs by verifier
+        assert!(verify_proof(&pvk, &proof, &[c]).unwrap());
+
+    }
+}
+
 mod bls12_377 {
-    use super::test_prove_and_verify;
+    use super::{test_prove_and_verify, test_prove_and_verify_with_d_out_of_prove_fn};
     use ark_bls12_377::Bls12_377;
 
     #[test]
     fn prove_and_verify() {
         test_prove_and_verify::<Bls12_377>(1);
+    }
+
+    #[test]
+    fn d_prove_and_verify() {
+        test_prove_and_verify_with_d_out_of_prove_fn::<Bls12_377>(1);
     }
 }
 

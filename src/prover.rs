@@ -208,10 +208,48 @@ where
     end_timer!(c_time);
 
     // Compute D
-    let d_acc_time = start_timer!(|| "Compute D");
+    // let d_acc_time = start_timer!(|| "Compute D");
 
-    let gamma_abc_inputs_source = &vk.gamma_abc_g1[input_assignment_with_one_field.len()
-    ..input_assignment_with_one_field.len() + committed_witnesses.len()];
+    // let gamma_abc_inputs_source = &vk.gamma_abc_g1[input_assignment_with_one_field.len()
+    // ..input_assignment_with_one_field.len() + committed_witnesses.len()];
+    // let gamma_abc_inputs_acc = <<E as Pairing>::G1 as VariableBaseMSM>::msm_bigint(
+    //     gamma_abc_inputs_source,
+    //     &committed_witnesses,
+    // );
+
+    // let v_eta_gamma_inv = vk.eta_gamma_inv_g1.into_group().mul(v);
+
+    // let mut g_d = gamma_abc_inputs_acc;
+    // g_d += &v_eta_gamma_inv;
+    // end_timer!(d_acc_time);
+
+    end_timer!(prover_time);
+
+    Ok(Proof {
+        a: g_a.into_affine(),
+        b: g2_b.into_affine(),
+        c: g_c.into_affine(),
+        d: E::G1Affine::zero(),
+    })
+}
+
+// create the d value for the legogroth proof
+pub fn create_d<E: Pairing>(
+    witnesses: Vec<E::ScalarField>,
+    public_input: Vec<E::ScalarField>,
+    vk: &VerifyingKey<E>,
+    v: E::ScalarField, // has to be the same in create_proof
+    pf: &Proof<E>,
+) -> R1CSResult<Proof<E>>
+{
+
+    let committed_witnesses = witnesses
+    .into_iter()
+    .map(|s| s.into_bigint())
+    .collect::<Vec<_>>();
+
+    let gamma_abc_inputs_source = &vk.gamma_abc_g1[public_input.len()+1
+    ..public_input.len()+1 + committed_witnesses.len()];
     let gamma_abc_inputs_acc = <<E as Pairing>::G1 as VariableBaseMSM>::msm_bigint(
         gamma_abc_inputs_source,
         &committed_witnesses,
@@ -221,16 +259,14 @@ where
 
     let mut g_d = gamma_abc_inputs_acc;
     g_d += &v_eta_gamma_inv;
-    end_timer!(d_acc_time);
-
-    end_timer!(prover_time);
 
     Ok(Proof {
-        a: g_a.into_affine(),
-        b: g2_b.into_affine(),
-        c: g_c.into_affine(),
+        a: pf.a,
+        b: pf.b,
+        c: pf.c,
         d: g_d.into_affine(),
     })
+
 }
 
 fn calculate_coeff<G: AffineRepr>(
